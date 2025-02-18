@@ -188,15 +188,13 @@ def create_srt(segments, output_srt, device):
     print("字幕ファイルを生成しています...")
     
     # プログレスバーの設定
-    progress = tqdm(total=2, desc="字幕生成", unit="ステップ", leave=True, dynamic_ncols=True, position=0)
+    progress = tqdm(total=2, desc="字幕生成", unit="ステップ", leave=True, ncols=100, bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
     
     # 1. 全セグメントをまとめて翻訳
-    print("翻訳を実行中...")
     translated_segments = translate_text(segments)
     progress.update(1)
     
     # 2. SRTファイルの生成
-    print("SRTファイルを生成中...")
     with open(output_srt, "w", encoding="utf-8") as f:
         for i, segment in enumerate(translated_segments, 1):
             # タイムスタンプをフォーマット
@@ -220,7 +218,7 @@ def burn_subtitles(input_video, srt_path, output_video):
         srt_path (str): SRTファイルのパス
         output_video (str): 出力動画のパス
     """
-    print("字幕を動画に焼き込んでいます...")
+    print("字幕を焼き込んでいます...", end="", flush=True)
     cmd = [
         "ffmpeg", "-i", input_video,
         "-vf", f"subtitles={srt_path}:force_style='FontName=Yu Gothic,FontSize=24,PrimaryColour=&HFFFFFF,BackColour=&H80000000,BorderStyle=4,Outline=0'",
@@ -230,8 +228,10 @@ def burn_subtitles(input_video, srt_path, output_video):
     try:
         # ffmpegの出力を抑制
         subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print(" 完了")
     except subprocess.CalledProcessError as e:
-        print(f"エラー: ffmpegの実行中にエラーが発生しました。\n{e.stderr}")
+        print("\nエラー: ffmpegの実行中にエラーが発生しました。")
+        print(e.stderr)
         raise
 
 def select_input_video():
