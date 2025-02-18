@@ -9,7 +9,6 @@ from datetime import timedelta
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from dotenv import load_dotenv
-from huggingface_hub import login
 from tqdm import tqdm
 import warnings
 from pydantic import BaseModel
@@ -38,29 +37,6 @@ def get_device():
         print("CPUを使用します")
         return torch.device("cpu")
 
-def setup_huggingface():
-    """
-    Hugging Faceの認証設定を行う
-    """
-    # .envファイルから環境変数を読み込む
-    load_dotenv()
-    
-    # トークンを取得
-    token = os.getenv("HUGGING_FACE_TOKEN")
-    if not token:
-        print("警告: HUGGING_FACE_TOKENが設定されていません。")
-        print(".envファイルに以下の形式でトークンを設定してください：")
-        print("HUGGING_FACE_TOKEN=your_token_here")
-        return False
-        
-    try:
-        # Hugging Faceにログイン
-        login(token=token)
-        return True
-    except Exception as e:
-        print(f"Hugging Faceログインエラー: {str(e)}")
-        return False
-
 def setup_gemini():
     """
     Gemini APIの設定を行う
@@ -74,7 +50,7 @@ def setup_gemini():
     
     # モデルの設定
     generation_config = {
-        "temperature": 0.1,
+        "temperature": 0.8,
         "top_p": 0.8,
         "top_k": 40,
     }
@@ -113,13 +89,12 @@ def transcribe_audio(video_path, device):
     
     return result["segments"]
 
-def translate_text(segments, device=None):
+def translate_text(segments):
     """
-    英語のテキストを日本語に翻訳
+    テキストを日本語に翻訳
     
     Args:
         segments (list): 翻訳するセグメントのリスト
-        device: 未使用（互換性のために残す）
     
     Returns:
         list: 翻訳されたセグメントのリスト
@@ -134,14 +109,14 @@ def translate_text(segments, device=None):
         
         # プロンプトの作成
         prompt = f"""
-以下の英語テキストを日本語に翻訳してください。テキストは[SEG数字]で区切られたセグメントに分かれています。
-文脈を考慮して自然な日本語に翻訳してください。
+        以下の英語テキストを日本語に翻訳してください。テキストは[SEG数字]で区切られたセグメントに分かれています。
+        文脈を考慮して自然な日本語に翻訳してください。
 
-テキスト:
-{combined_text}
+        テキスト:
+        {combined_text}
 
-[SEG数字]マーカーを使って分割されたテキストを個別のセグメントとして扱い、翻訳してください。
-"""
+        [SEG数字]マーカーを使って分割されたテキストを個別のセグメントとして扱い、翻訳してください。
+        """
         
         # 翻訳の実行
         response = model.generate_content(
@@ -157,9 +132,6 @@ def translate_text(segments, device=None):
         
         # レスポンスのテキストを取得して整形
         response_text = response.text.strip()
-        
-        # デバッグ用の出力
-        print("API Response:", response_text)
         
         try:
             # Pydanticモデルとしてパース
@@ -220,7 +192,7 @@ def create_srt(segments, output_srt, device):
     
     # 1. 全セグメントをまとめて翻訳
     print("翻訳を実行中...")
-    translated_segments = translate_text(segments, device)
+    translated_segments = translate_text(segments)
     progress.update(1)
     
     # 2. SRTファイルの生成
@@ -308,17 +280,6 @@ def main():
     parser.add_argument("--output", "-o", help="出力動画ファイルのパス")
     parser.add_argument("--gui", "-g", action="store_true", help="GUIモードを使用")
     args = parser.parse_args()
-
-    # 初回実行時の注意メッセージ
-    print("注意: 初回実行時は必要なモデルをダウンロードするため、時間がかかる場合があります。")
-
-    # Hugging Face認証の設定
-    if not setup_huggingface():
-        if args.gui:
-            root = tk.Tk()
-            root.withdraw()
-            messagebox.showerror("エラー", "Hugging Faceの認証に失敗しました。\n.envファイルのトークンを確認してください。")
-        return
 
     # GUIモードまたはコマンドライン引数が不足している場合、ファイル選択ダイアログを表示
     input_video = args.input
