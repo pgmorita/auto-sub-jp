@@ -6,7 +6,6 @@
 
 - Python 3.8以上
 - ffmpeg（システムにインストール済みであること）
-- NVIDIA GPU（推奨）またはCPU
 
 ## インストール方法
 
@@ -30,11 +29,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. Hugging Faceのトークンを設定：
-   - https://huggingface.co/settings/tokens でトークンを生成
+4. Google Gemini APIキーを設定：
+   - https://makersuite.google.com/app/apikey でAPIキーを生成
    - `.env`ファイルに以下の形式で記載：
    ```
-   HUGGING_FACE_TOKEN=your_token_here
+   GEMINI_API_KEY=your_api_key_here
    ```
 
 ## 使用方法
@@ -64,7 +63,7 @@ python auto_sub_jp.py -i input.mp4 -o output_with_subtitles.mp4
 ## 機能
 
 - Whisperを使用した音声認識（baseモデル）
-- staka/fugumt-en-jaモデルによる高精度な機械翻訳
+- Google Gemini APIによる高精度な機械翻訳
 - SRT形式の字幕ファイル生成
 - ffmpegによる字幕の動画への焼き込み
 - GUIによる簡単なファイル選択
@@ -74,19 +73,16 @@ python auto_sub_jp.py -i input.mp4 -o output_with_subtitles.mp4
 ## モデルとキャッシュについて
 
 ### モデルの保存場所
-- Whisperモデル: `~/.cache/whisper`（約1GB）
-- 翻訳モデル: `~/.cache/huggingface/hub`（約2GB）
+- Whisperモデル: `~/.cache/whisper`
 
 ### キャッシュのクリア
 不要になったモデルは以下のフォルダを削除することでクリアできます：
 ```bash
 # Windows
 %USERPROFILE%\.cache\whisper
-%USERPROFILE%\.cache\huggingface
 
 # Linux/Mac
 ~/.cache/whisper
-~/.cache/huggingface
 ```
 
 ## GPU対応について
@@ -107,6 +103,5 @@ python auto_sub_jp.py -i input.mp4 -o output_with_subtitles.mp4
 
 - 入力動画は英語音声であることを前提としています
 - 処理時間は動画の長さとハードウェアによって変動します
-- 初回実行時は必要なモデルのダウンロードに時間がかかります（約3GB）
 - Windows環境でのシンボリックリンクの警告は無視して問題ありません
 - 長い動画の場合、十分なディスク容量があることを確認してください
