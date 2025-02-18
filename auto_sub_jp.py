@@ -2,7 +2,8 @@ import os
 import argparse
 import whisper
 import torch
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import subprocess
 from datetime import timedelta
 import tkinter as tk
@@ -11,6 +12,15 @@ from dotenv import load_dotenv
 from huggingface_hub import login
 from tqdm import tqdm
 import warnings
+from pydantic import BaseModel
+from typing import List
+
+class TranslationSegment(BaseModel):
+    original: str
+    translation: str
+
+class TranslationResponse(BaseModel):
+    segments: List[TranslationSegment]
 
 def get_device():
     """
@@ -51,6 +61,39 @@ def setup_huggingface():
         print(f"Hugging Faceログインエラー: {str(e)}")
         return False
 
+def setup_gemini():
+    """
+    Gemini APIの設定を行う
+    """
+    load_dotenv()
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEYが設定されていません。.envファイルを確認してください。")
+    
+    genai.configure(api_key=api_key)
+    
+    # モデルの設定
+    generation_config = {
+        "temperature": 0.1,
+        "top_p": 0.8,
+        "top_k": 40,
+    }
+    
+    safety_settings = {
+        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    }
+    
+    model = genai.GenerativeModel(
+        model_name="gemini-2.0-flash",
+        generation_config=generation_config,
+        safety_settings=safety_settings
+    )
+    
+    return model
+
 def transcribe_audio(video_path, device):
     """
     Whisperを使用して動画から音声を文字起こしし、タイムスタンプ付きのセグメントを取得
@@ -70,49 +113,79 @@ def transcribe_audio(video_path, device):
     
     return result["segments"]
 
-def translate_text(text, device=None):
+def translate_text(segments, device=None):
     """
     英語のテキストを日本語に翻訳
     
     Args:
-        text (str): 翻訳する英語テキスト
-        device (torch.device, optional): 使用するデバイス
+        segments (list): 翻訳するセグメントのリスト
+        device: 未使用（互換性のために残す）
     
     Returns:
-        str: 翻訳された日本語テキスト
+        list: 翻訳されたセグメントのリスト
     """
     try:
-        # モデルとトークナイザーの設定
-        model_name = "staka/fugumt-en-ja"
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        model = setup_gemini()
         
-        # GPUが利用可能な場合は強制的に使用
-        if torch.cuda.is_available():
-            model = model.cuda()
-        else:
-            model = model.to(device)
+        # セグメントを区切りマーク付きで結合
+        combined_text = ""
+        for i, segment in enumerate(segments):
+            combined_text += f"[SEG{i}]{segment['text']}"
         
-        # 入力テキストのエンコード
-        inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
-        inputs = {k: v.to(device) for k, v in inputs.items()}
+        # プロンプトの作成
+        prompt = f"""
+以下の英語テキストを日本語に翻訳してください。テキストは[SEG数字]で区切られたセグメントに分かれています。
+文脈を考慮して自然な日本語に翻訳してください。
+
+テキスト:
+{combined_text}
+
+[SEG数字]マーカーを使って分割されたテキストを個別のセグメントとして扱い、翻訳してください。
+"""
         
         # 翻訳の実行
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_length=512,
-                num_beams=5,
-                length_penalty=0.6,
-                early_stopping=True
-            )
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.1,
+                "top_p": 0.8,
+                "top_k": 40,
+                "response_mime_type": "application/json",
+                "response_schema": TranslationResponse
+            }
+        )
         
-        # 翻訳結果のデコード
-        translated = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return translated
+        # レスポンスのテキストを取得して整形
+        response_text = response.text.strip()
+        
+        # デバッグ用の出力
+        print("API Response:", response_text)
+        
+        try:
+            # Pydanticモデルとしてパース
+            result = TranslationResponse.model_validate_json(response_text)
+            
+            # 結果をセグメントに反映
+            for i, segment in enumerate(segments):
+                if i < len(result.segments):
+                    segment["translation"] = result.segments[i].translation
+                else:
+                    print(f"警告: セグメント {i} の翻訳が見つかりません")
+                    segment["translation"] = segment["text"]
+            
+            return segments
+            
+        except Exception as e:
+            print(f"パースエラー: {str(e)}")
+            print("受信したテキスト:", response_text)
+            raise
         
     except Exception as e:
-        return text
+        print(f"翻訳エラー: {str(e)}")
+        # エラーの場合は原文をそのまま返す
+        for segment in segments:
+            segment["translation"] = segment["text"]
+        return segments
 
 def format_time(seconds):
     """
@@ -142,14 +215,18 @@ def create_srt(segments, output_srt, device):
     """
     print("字幕ファイルを生成しています...")
     
-    # プログレスバーの設定（leave=Trueで最後の行を残し、dynamic_ncolsで1行に収める）
-    progress = tqdm(total=len(segments), desc="字幕生成", unit="セグメント", leave=True, dynamic_ncols=True, position=0)
+    # プログレスバーの設定
+    progress = tqdm(total=2, desc="字幕生成", unit="ステップ", leave=True, dynamic_ncols=True, position=0)
     
+    # 1. 全セグメントをまとめて翻訳
+    print("翻訳を実行中...")
+    translated_segments = translate_text(segments, device)
+    progress.update(1)
+    
+    # 2. SRTファイルの生成
+    print("SRTファイルを生成中...")
     with open(output_srt, "w", encoding="utf-8") as f:
-        for i, segment in enumerate(segments, 1):
-            # 英語テキストを日本語に翻訳（引数のdeviceを利用）
-            translated_text = translate_text(segment["text"], device)
-            
+        for i, segment in enumerate(translated_segments, 1):
             # タイムスタンプをフォーマット
             start_time = format_time(segment["start"])
             end_time = format_time(segment["end"])
@@ -157,11 +234,9 @@ def create_srt(segments, output_srt, device):
             # SRTフォーマットで書き込み
             f.write(f"{i}\n")
             f.write(f"{start_time} --> {end_time}\n")
-            f.write(f"{translated_text}\n\n")
-            
-            # プログレスバーを更新
-            progress.update(1)
+            f.write(f"{segment['translation']}\n\n")
     
+    progress.update(1)
     progress.close()
 
 def burn_subtitles(input_video, srt_path, output_video):
