@@ -81,7 +81,7 @@ def setup_gemini(custom_system_prompt=None):
         適切な形式を維持し、翻訳時に文脈を考慮してください。
         [SEG数字]マーカーを使って分割されたテキストを個別のセグメントとして扱い、翻訳してください。
         [SEG数字]マーカーはsegmentsごとに分けたJsonデータを作るための区切り文字です。
-        originalとtranslationには[SEG数字]マーカーは含めないでください。
+        [SEG数字]マーカーは出力に含めないでください。
         
         追加の翻訳指示（動画の背景情報や、翻訳の注意点、口調の指示など）：
         {custom_system_prompt}
