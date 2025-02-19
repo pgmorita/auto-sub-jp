@@ -381,7 +381,10 @@ def main():
             return
 
     if args.gui or not output_video:
-        default_output = "output_with_subtitles.mp4"
+        # 入力動画のファイル名を取得し、【字幕】を追加
+        input_filename = os.path.basename(input_video)
+        name, ext = os.path.splitext(input_filename)
+        default_output = f"【字幕】{name}.mp4"
         output_video = select_output_path(default_output)
         if not output_video:
             print("出力ファイルが選択されませんでした。")
