@@ -68,7 +68,6 @@ python auto_sub_jp.py -i input.mp4 -o output_with_subtitles.mp4
 - ffmpegによる字幕の動画への焼き込み
 - GUIによる簡単なファイル選択
 - GPU/CPU自動検出と利用
-- プログレスバーによる進捗表示
 
 ## モデルとキャッシュについて
 
