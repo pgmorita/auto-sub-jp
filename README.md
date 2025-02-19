@@ -102,3 +102,7 @@ python auto_sub_jp.py -i input.mp4 -o output_with_subtitles.mp4
 
 - 処理時間は動画の長さとハードウェアによって変動します
 - 長い動画の場合、十分なディスク容量があることを確認してください
+- Gemini APIの使用時にgRPCのタイムアウト警告が表示される場合は、以下のコマンドでgrpcioをダウングレードすることで解決できます：
+  ```bash
+  pip install grpcio==1.67.1 grpcio-status==1.67.1
+  ```
