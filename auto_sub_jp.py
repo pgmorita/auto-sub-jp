@@ -84,7 +84,7 @@ def transcribe_audio(video_path, device):
     print("音声認識を開始します...")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="FP16 is not supported on CPU; using FP32 instead")
-        model = whisper.load_model("base").to(device)
+        model = whisper.load_model("medium").to(device)
         result = model.transcribe(video_path)
     
     return result["segments"]
