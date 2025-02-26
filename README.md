@@ -11,7 +11,7 @@
 
 1. リポジトリをクローン：
 ```bash
-git clone https://github.com/yourusername/AutoSubJP.git
+git clone https://github.com/pgmorita/AutoSubJP.git
 cd AutoSubJP
 ```
 
